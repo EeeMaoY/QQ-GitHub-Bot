@@ -27,7 +27,10 @@ services:
     image: ghcr.io/cscs181/qq-github-bot:latest # github image mirror
     # build: . # use "build" instead of "image" if you want to build the image yourself
     env_file:
-      - .env
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
     environment:
       - ENVIRONMENT=prod
       - HOST=${HOST:-0.0.0.0}
