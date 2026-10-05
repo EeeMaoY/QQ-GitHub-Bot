@@ -1,7 +1,7 @@
 version: "3"
 services:
   redis:
-    image: redis:7-alpine
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7-alpine
     environment:
       - TZ=Asia/Shanghai
       - REDIS_PASSWORD=${REDIS_PASSWORD:?err}
@@ -11,7 +11,7 @@ services:
     restart: always
 
   postgres:
-    image: postgres:15-alpine
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:15-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_USER:?err}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?err}
@@ -23,8 +23,8 @@ services:
     restart: always
 
   nonebot:
-    image: cscs181/qq-github-bot:latest # docker hub
-    # image: ghcr.io/cscs181/qq-github-bot:latest # github image mirror
+    # image: cscs181/qq-github-bot:latest # docker hub
+    image: ghcr.io/cscs181/qq-github-bot:latest # github image mirror
     # build: . # use "build" instead of "image" if you want to build the image yourself
     env_file:
       - .env
@@ -37,6 +37,8 @@ services:
       - REDIS_PORT=6379
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+    ports: 
+      - "8086:8086"
     depends_on:
       - redis
       - postgres
