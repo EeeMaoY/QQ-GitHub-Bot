@@ -1094,3 +1094,22 @@ class IssueClosedContext:
                 commit_id=merge_commit_sha,
             ),
         )
+
+
+@dataclass(frozen=True, kw_only=True)
+class HelpCommand:
+    name: str
+    description: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class HelpSection:
+    name: str
+    commands: list[HelpCommand]
+
+
+@dataclass(frozen=True, kw_only=True)
+class HelpContext:
+    title: str
+    description: str
+    sections: list[HelpSection]

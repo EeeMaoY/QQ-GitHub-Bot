@@ -28,18 +28,17 @@ from src.plugins.github.helpers import (
     MATCH_WHEN_GROUP,
 )
 from src.plugins.github.dependencies import (
-    GROUP,
     BINDED_GROUP,
     GITHUB_REPO_INSTALLATION,
-    bypass_arg,
     allow_cancellation,
 )
 
 __plugin_meta__ = PluginMetadata(
     "GitHub 群仓库绑定",
     "群绑定 GitHub 仓库以进行快捷 Issue、PR 相关操作（仅限群管理员）",
-    "/bind [owner/repo]: 群查询或绑定 GitHub 仓库（仅仓库安装 APP 后有效）\n"
-    "/unbind: 群解绑 GitHub 仓库",
+    "/bind [owner/repo]: 群查询或绑定 GitHub 仓库，可绑定多个仓库"
+    "（仅仓库安装 APP 后有效）\n"
+    "/unbind [owner/repo]: 群解绑指定仓库，不填写仓库则解绑全部",
 )
 
 bind = on_command(
@@ -56,12 +55,6 @@ bind = on_command(
 async def process_arg(matcher: Matcher, arg: Message = CommandArg()):
     if full_name := arg.extract_plain_text().strip():
         matcher.set_arg("full_name", arg.__class__(full_name))
-
-
-@bind.handle(parameterless=(bypass_arg("full_name"),))
-async def check_group_exists(group: GROUP):
-    if group and group.bind_repo is not None:
-        await bind.finish(f"当前已绑定仓库：{group.bind_repo}")
 
 
 @bind.got(
@@ -86,14 +79,30 @@ async def handle_bind(
 ):
     owner = state["owner"]
     repo = state["repo"]
+    full_name = f"{owner}/{repo}"
 
     try:
-        await Group.create_or_update_by_info(group_info, bind_repo=f"{owner}/{repo}")
+        group = await Group.from_info(group_info)
+    except Exception as e:
+        logger.opt(exception=e).error(f"Failed while getting group: {e}")
+        await bind.finish("未知错误发生，请尝试重试或联系管理员")
+
+    repos = group.bind_repos if group else []
+    if full_name in repos:
+        await bind.finish(
+            f"本群已绑定仓库 {full_name} ！\n当前已绑定：{'、'.join(repos)}"
+        )
+
+    repos.append(full_name)
+    try:
+        await Group.create_or_update_by_info(group_info, bind_repo=",".join(repos))
     except Exception as e:
         logger.opt(exception=e).error(f"Failed while binding group: {e}")
         await bind.finish("未知错误发生，请尝试重试或联系管理员")
 
-    await bind.finish(f"本群成功绑定仓库 {owner}/{repo} ！")
+    await bind.finish(
+        f"本群成功绑定仓库 {full_name} ！\n当前已绑定：{'、'.join(repos)}"
+    )
 
 
 unbind = on_command(
@@ -107,11 +116,25 @@ unbind = on_command(
 
 
 @unbind.handle()
-async def process_unbind(group: BINDED_GROUP):
+async def process_unbind(group: BINDED_GROUP, arg: Message = CommandArg()):
+    full_name = arg.extract_plain_text().strip()
+    if full_name and full_name not in group.bind_repos:
+        await unbind.finish(f"本群未绑定仓库 {full_name} ！")
+
     try:
-        await group.unbind()
+        if full_name:
+            await group.remove_repo(full_name)
+        else:
+            await group.unbind()
     except Exception as e:
         logger.opt(exception=e).error(f"Failed while unbind group: {e}")
         await unbind.finish("未知错误发生，请尝试重试或联系管理员")
 
-    await unbind.finish("成功解绑仓库！")
+    if not full_name:
+        await unbind.finish("成功解绑全部仓库！")
+
+    if remaining := group.bind_repos:
+        await unbind.finish(
+            f"成功解绑仓库 {full_name} ！\n当前已绑定：{'、'.join(remaining)}"
+        )
+    await unbind.finish(f"成功解绑仓库 {full_name} ！\n当前已无绑定仓库")

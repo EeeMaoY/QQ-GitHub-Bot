@@ -26,6 +26,7 @@ from .filters import (
 )
 from .context import (
     DiffContext,
+    HelpContext,
     IssueContext,
     ReadmeContext,
     IssueClosedContext,
@@ -141,4 +142,17 @@ async def issue_closed_to_html(
         theme: the theme of the html
     """
     template = env.get_template("views/issue-closed.html.jinja")
+    return await template.render_async(ctx=ctx, theme=theme)
+
+
+async def help_to_html(
+    ctx: HelpContext, theme: Literal["light", "dark"] = "light"
+) -> str:
+    """Render command help to html
+
+    Args:
+        ctx: the help context
+        theme: the theme of the html
+    """
+    template = env.get_template("views/help.html.jinja")
     return await template.render_async(ctx=ctx, theme=theme)

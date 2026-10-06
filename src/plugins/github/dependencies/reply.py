@@ -35,8 +35,13 @@ async def get_reply_tag(
     if reply_info:
         return await get_message_tag(reply_info)
     # else create tag from group binded repo
-    if group_info and (group := await Group.from_info(group_info)) and group.bind_repo:
-        owner, repo = group.bind_repo.split("/")
+    if (
+        group_info
+        and (group := await Group.from_info(group_info))
+        and (repos := group.bind_repos)
+    ):
+        # use the first bound repo as the default when multiple repos are bound
+        owner, repo = repos[0].split("/", maxsplit=1)
         return RepoTag(owner=owner, repo=repo, is_receive=True)
 
 

@@ -184,7 +184,8 @@ issue_short = on_regex(
 
 @issue_short.handle(parameterless=(STORE_REGEX_VARS,))
 async def check_bind(state: T_State, group: BINDED_GROUP):
-    state["owner"], state["repo"] = group.bind_repo.split("/", maxsplit=1)
+    # use the first bound repo as the default when multiple repos are bound
+    state["owner"], state["repo"] = group.bind_repos[0].split("/", maxsplit=1)
 
 
 @issue_short.handle()

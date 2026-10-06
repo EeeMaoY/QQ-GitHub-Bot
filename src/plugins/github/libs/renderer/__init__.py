@@ -26,6 +26,7 @@ from src.plugins.github.cache.rendered_image import (
 
 from .context import (
     DiffContext,
+    HelpContext,
     IssueContext,
     ReadmeContext,
     IssueClosedContext,
@@ -34,6 +35,7 @@ from .context import (
     UserContributionContext,
 )
 from .render import (
+    help_to_html,
     issue_to_html,
     readme_to_html,
     pr_diff_to_html,
@@ -77,6 +79,7 @@ def _context_hash(
         | IssueOpenedContext
         | IssueCommentedContext
         | IssueClosedContext
+        | HelpContext
     ),
 ) -> str:
     context_json = to_json(context)
@@ -210,4 +213,16 @@ async def issue_closed_to_image(
     html = await issue_closed_to_html(context, theme=config.github_theme)
     image = await _github_html_to_image(html)
     await save_rendered_image("issue_closed", context_hash, image)
+    return image
+
+
+async def help_to_image(context: HelpContext) -> bytes:
+    """Render command help to image"""
+    context_hash = _context_hash(context)
+    if cached_image := await get_rendered_image("help", context_hash):
+        return cached_image
+
+    html = await help_to_html(context, theme=config.github_theme)
+    image = await _github_html_to_image(html)
+    await save_rendered_image("help", context_hash, image)
     return image

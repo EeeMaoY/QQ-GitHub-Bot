@@ -64,6 +64,33 @@ class Group(Model):
             await session.refresh(group)
             return group
 
+    @property
+    def bind_repos(self) -> list[str]:
+        """List bound repos
+
+        Multiple repos are stored in the single bind_repo column,
+        separated by comma, so the database schema stays unchanged.
+        """
+        if not self.bind_repo:
+            return []
+        return [repo for repo in self.bind_repo.split(",") if repo]
+
+    async def set_repos(self, repos: list[str]) -> None:
+        """Set bound repos"""
+        self.bind_repo = ",".join(repos) if repos else None
+        async with get_session() as session:
+            session.add(self)
+            await session.commit()
+
+    async def remove_repo(self, repo: str) -> bool:
+        """Remove a bound repo. Return whether the repo was bound."""
+        repos = self.bind_repos
+        if repo not in repos:
+            return False
+        repos.remove(repo)
+        await self.set_repos(repos)
+        return True
+
     async def unbind(self) -> None:
         """Unbind group and repo"""
         self.bind_repo = None
