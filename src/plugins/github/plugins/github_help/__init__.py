@@ -46,6 +46,10 @@ HELP_SECTIONS = [
                 description="群解绑指定仓库，不填写仓库则解绑全部",
             ),
             HelpCommand(
+                name="/repos",
+                description="查看本群已绑定的仓库列表（标注默认仓库）",
+            ),
+            HelpCommand(
                 name="#number",
                 description="快捷查看本群默认（首个绑定）仓库的 Issue / PR",
             ),

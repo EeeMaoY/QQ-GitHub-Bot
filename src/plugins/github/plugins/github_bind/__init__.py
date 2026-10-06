@@ -38,7 +38,8 @@ __plugin_meta__ = PluginMetadata(
     "群绑定 GitHub 仓库以进行快捷 Issue、PR 相关操作（仅限群管理员）",
     "/bind [owner/repo]: 群查询或绑定 GitHub 仓库，可绑定多个仓库"
     "（仅仓库安装 APP 后有效）\n"
-    "/unbind [owner/repo]: 群解绑指定仓库，不填写仓库则解绑全部",
+    "/unbind [owner/repo]: 群解绑指定仓库，不填写仓库则解绑全部\n"
+    "/repos: 查看本群已绑定的仓库列表",
 )
 
 bind = on_command(
@@ -138,3 +139,37 @@ async def process_unbind(group: BINDED_GROUP, arg: Message = CommandArg()):
             f"成功解绑仓库 {full_name} ！\n当前已绑定：{'、'.join(remaining)}"
         )
     await unbind.finish(f"成功解绑仓库 {full_name} ！\n当前已无绑定仓库")
+
+
+repos = on_command(
+    "repos",
+    aliases={"仓库列表", "绑定列表"},
+    rule=MATCH_WHEN_GROUP & NO_GITHUB_EVENT,
+    priority=config.github_command_priority,
+    block=True,
+)
+
+
+@repos.handle()
+async def handle_repos(group_info: GROUP_INFO):
+    try:
+        group = await Group.from_info(group_info)
+    except Exception as e:
+        logger.opt(exception=e).error(f"Failed while getting group: {e}")
+        await repos.finish("未知错误发生，请尝试重试或联系管理员")
+
+    bound_repos = group.bind_repos if group else []
+    if not bound_repos:
+        await repos.finish("本群暂无绑定仓库")
+
+    if len(bound_repos) == 1:
+        await repos.finish(f"本群已绑定仓库：{bound_repos[0]}")
+
+    # use the first bound repo as the default for #number when multiple repos
+    lines = [
+        f"{repo}（默认）" if index == 0 else repo
+        for index, repo in enumerate(bound_repos)
+    ]
+    await repos.finish(
+        "本群已绑定仓库（默认仓库为 #number 快捷查看的目标）：\n" + "\n".join(lines)
+    )
