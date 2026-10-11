@@ -22,6 +22,7 @@ from nonebot.adapters.github import OAuthBot, GitHubBot, ActionFailed, ActionTim
 
 from src.plugins.github import config
 from src.plugins.github.utils import get_oauth_bot, get_github_bot
+from src.plugins.github.libs.auth import refresh_user_token
 
 from .user import USER
 
@@ -56,6 +57,17 @@ async def get_github_public_context(
 
     # First use user auth, allow user to access private repo if authorized
     if user and user.access_token is not None:
+        # 令牌临近过期就先刷新，否则下面这次 check_token 会因为令牌过期返回 404，
+        # 被误判成「用户未授权」并白白退回 installation / 公开上下文，丢掉私有仓库
+        # 的访问权限。刷新失败不在这里 finish：本依赖的设计就是逐级降级，
+        # 落到后面的 installation 或公开上下文即可。
+        if user.access_token_needs_refresh():
+            try:
+                await refresh_user_token(user)
+            except Exception as e:
+                logger.opt(exception=e).error(
+                    f"Failed while refreshing github token: {e}"
+                )
         try:
             async with bot.as_oauth_app():
                 resp = await bot.rest.apps.async_check_token(

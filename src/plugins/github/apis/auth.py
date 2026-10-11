@@ -53,7 +53,7 @@ async def auth(code: str, state: str | None = None):
         )
 
     try:
-        user = await create_auth_user(user_info, access_token=token)
+        user = await create_auth_user(user_info, token)
     except Exception as e:
         logger.opt(exception=e).error(
             "Failed to update access_token for user!", user=user_info.model_dump()

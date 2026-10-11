@@ -20,6 +20,7 @@ from githubkit.versions.latest.models import PublicUser, PrivateUser
 from src.plugins.github.models import User
 from src.providers.platform import USER_INFO
 from src.plugins.github.utils import get_github_bot
+from src.plugins.github.libs.auth import refresh_user_token
 
 
 async def get_current_user(user: USER_INFO) -> User | None:
@@ -45,9 +46,23 @@ async def get_authorized_user(matcher: Matcher, user: USER) -> AuthorizedUser:
     """Get current database user from event.
 
     Finish the session if user is not authenticated.
+
+    GitHub App 的 user token 8 小时过期，因此在这里统一做「用前刷新」：所有需要
+    用户授权的命令都走这个依赖，改这一处即可全覆盖（comment/close/approve/
+    subscribe/... 十来个命令），调用方不用各自处理过期。
     """
     if not user or not user.access_token:
         await matcher.finish("你还没有绑定 GitHub 帐号，请私聊使用 /install 进行安装")
+
+    if user.access_token_needs_refresh():
+        try:
+            refreshed = await refresh_user_token(user)
+        except Exception as e:
+            logger.opt(exception=e).error(f"Failed while refreshing github token: {e}")
+            refreshed = False
+        if not refreshed:
+            await matcher.finish("你的 GitHub 帐号授权已过期，请使用 /auth 进行刷新")
+
     return user  # type: ignore
 
 

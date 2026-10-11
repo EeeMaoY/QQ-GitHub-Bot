@@ -17,7 +17,8 @@ from src.plugins.github import config
 from src.providers.platform import USER_INFO
 from src.plugins.github.utils import get_github_bot
 from src.plugins.github.helpers import NO_GITHUB_EVENT
-from src.plugins.github.libs.auth import create_auth_link
+from src.plugins.github.libs.auth import create_auth_link, revoke_user_token
+from src.plugins.github.models.user import ensure_utc
 from src.plugins.github.dependencies import (
     RUN_WHEN_GROUP,
     AUTHORIZED_USER,
@@ -86,8 +87,18 @@ async def check_user_status(user: AUTHORIZED_USER):
             await auth_check.finish("未知错误发生，请尝试重试或联系管理员")
 
     if gh_user := resp.parsed_data.user:
-        await auth_check.finish(f"你已绑定 GitHub 帐号 {gh_user.login}")
-    await auth_check.finish("你已绑定 GitHub 帐号")
+        message = f"你已绑定 GitHub 帐号 {gh_user.login}"
+    else:
+        message = "你已绑定 GitHub 帐号"
+
+    # AUTHORIZED_USER 依赖已经做过「用前刷新」，走到这里令牌一定是新鲜的
+    if expires_at := ensure_utc(user.access_token_expires_at):
+        message += (
+            f"\naccess_token 将于 {expires_at.astimezone():%Y-%m-%d %H:%M %z} 过期"
+            "（到期前会自动刷新）"
+        )
+
+    await auth_check.finish(message)
 
 
 auth_revoke = on_command(
@@ -101,20 +112,15 @@ auth_revoke = on_command(
 
 @auth_revoke.handle()
 async def revoke_user(user: AUTHORIZED_USER):
-    bot = get_github_bot()
-
-    async with bot.as_oauth_app():
-        try:
-            await bot.rest.apps.async_delete_token(
-                client_id=config.github_app.client_id, access_token=user.access_token
-            )
-        except ActionTimeout:
-            await auth_revoke.finish("GitHub API 超时，请稍后再试")
-        except Exception as e:
-            logger.opt(exception=e).error(
-                f"Failed while deleting token in auth revoke: {e}"
-            )
-            await auth_revoke.finish("未知错误发生，请尝试重试或联系管理员")
+    try:
+        await revoke_user_token(user.access_token)
+    except ActionTimeout:
+        await auth_revoke.finish("GitHub API 超时，请稍后再试")
+    except Exception as e:
+        logger.opt(exception=e).error(
+            f"Failed while deleting token in auth revoke: {e}"
+        )
+        await auth_revoke.finish("未知错误发生，请尝试重试或联系管理员")
 
     try:
         await user.unauth()
