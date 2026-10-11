@@ -105,6 +105,10 @@ async def handle_contribution(
     except ActionTimeout:
         await contribution.finish("GitHub API 超时，请稍后再试")
     except ActionFailed as e:
+        if e.response.status_code == 401:
+            await contribution.finish(
+                "你的 GitHub 帐号授权已过期，请使用 /auth 进行刷新"
+            )
         logger.opt(exception=e).error(f"Failed while get user contribution: {e}")
         await contribution.finish("未知错误发生，请尝试重试或联系管理员")
     except GraphQLError as e:

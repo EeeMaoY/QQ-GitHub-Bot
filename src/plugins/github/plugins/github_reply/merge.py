@@ -138,7 +138,9 @@ async def handle_merge(
         except ActionTimeout:
             await merge.finish("GitHub API 超时，请稍后再试")
         except ActionFailed as e:
-            if e.response.status_code == 404:
+            if e.response.status_code == 401:
+                await merge.finish("你的 GitHub 帐号授权已过期，请使用 /auth 进行刷新")
+            elif e.response.status_code == 404:
                 await merge.finish(f"未找到 {owner}/{repo}#{number} 对应的 PR")
             logger.opt(exception=e).error(f"Failed while merge pr: {e}")
             await merge.finish("未知错误发生，请尝试重试或联系管理员")

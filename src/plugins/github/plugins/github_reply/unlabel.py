@@ -126,7 +126,9 @@ async def handle_unlabel(
     except ActionTimeout:
         await unlabel.finish("GitHub API 超时，请稍后再试")
     except ActionFailed as e:
-        if e.response.status_code == 403:
+        if e.response.status_code == 401:
+            await unlabel.finish("你的 GitHub 帐号授权已过期，请使用 /auth 进行刷新")
+        elif e.response.status_code == 403:
             await unlabel.finish("权限不足，请尝试使用 /install 安装或刷新授权")
         elif e.response.status_code == 404:
             await unlabel.finish(f"{owner}/{repo}#{number} 不存在标签 {label_}")

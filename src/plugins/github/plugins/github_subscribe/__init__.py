@@ -182,15 +182,17 @@ async def handle_subscribe_repo(
     except ActionTimeout:
         await subscribe.finish("GitHub API 超时，请稍后再试")
     except ActionFailed as e:
+        if e.response.status_code == 401:
+            await subscribe.finish("你的 GitHub 帐号授权已过期，请使用 /auth 进行刷新")
         if e.response.status_code in {403, 404}:
             await subscribe.finish(f"你没有权限访问仓库 {full_name} ！")
         logger.opt(exception=e).error(
-            f"Failed while checking user permission in group subscribe: {e}"
+            f"Failed while listing accessible repos in subscribe: {e}"
         )
         await subscribe.finish("未知错误发生，请尝试重试或联系管理员")
     except Exception as e:
         logger.opt(exception=e).error(
-            f"Failed while checking user permission in group subscribe: {e}"
+            f"Failed while listing accessible repos in subscribe: {e}"
         )
         await subscribe.finish("未知错误发生，请尝试重试或联系管理员")
 
