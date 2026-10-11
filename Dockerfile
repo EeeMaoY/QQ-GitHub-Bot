@@ -4,7 +4,14 @@ FROM python:3.11-bookworm AS requirements-stage
 
 WORKDIR /tmp
 
-ENV POETRY_HOME="/opt/poetry" PATH="${PATH}:/opt/poetry/bin"
+# 国内网络加速：poetry 安装器与 poetry 自身都通过 pip 取包，统一指向 PyPI 镜像
+ENV POETRY_HOME="/opt/poetry" PATH="${PATH}:/opt/poetry/bin" \
+  PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple" \
+  PIP_TRUSTED_HOST="mirrors.aliyun.com"
+
+# 同时写入 pip 用户级配置，覆盖 poetry 安装器自建 venv 里的 pip
+RUN python -m pip config set global.index-url "${PIP_INDEX_URL}" && \
+  python -m pip config set global.trusted-host "${PIP_TRUSTED_HOST}"
 
 RUN curl -sSL https://install.python-poetry.org | python - -y && \
   poetry self add poetry-plugin-export
@@ -19,7 +26,9 @@ WORKDIR /wheel
 
 COPY --from=requirements-stage /tmp/requirements.txt /wheel/requirements.txt
 
-# RUN python3 -m pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
+# 国内网络加速：下载 wheel 走 PyPI 镜像
+ENV PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple" \
+  PIP_TRUSTED_HOST="mirrors.aliyun.com"
 
 RUN pip wheel --wheel-dir=/wheel --no-cache-dir --requirement /wheel/requirements.txt
 
@@ -49,14 +58,15 @@ EXPOSE 8086
 
 ENV APP_MODULE=bot:app
 
-# RUN mv /etc/apt/sources.list /etc/apt/sources.list.bak &&\
-#   echo "deb http://mirrors.aliyun.com/debian/ buster main" >> /etc/apt/sources.list\
-#   && echo "deb http://mirrors.aliyun.com/debian/ buster-updates main" >> /etc/apt/sources.list\
-#   && echo "deb http://mirrors.aliyun.com/debian-security/ buster/updates main" >> /etc/apt/sources.list
+# 国内网络加速：Debian 官方源换阿里云镜像。
+# bookworm 用 deb822 格式的 /etc/apt/sources.list.d/debian.sources，老版本才是 sources.list，两个都兜住。
+RUN sed -i "s|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null \
+  || sed -i "s|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g" /etc/apt/sources.list
 
+# Sarasa 字体走 gh-proxy 代理（GitHub releases 直连约 57KB/s，代理约 180KB/s）
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl p7zip-full fontconfig fonts-noto-color-emoji \
-  && curl -sSL https://github.com/be5invis/Sarasa-Gothic/releases/download/v1.0.14/Sarasa-TTC-1.0.14.7z -o /tmp/sarasa.7z \
+  && curl -sSL https://gh-proxy.com/https://github.com/be5invis/Sarasa-Gothic/releases/download/v1.0.14/Sarasa-TTC-1.0.14.7z -o /tmp/sarasa.7z \
   && 7z x /tmp/sarasa.7z -o/tmp/sarasa \
   && install -d /usr/share/fonts/sarasa-gothic \
   && install -m644 /tmp/sarasa/*.ttc /usr/share/fonts/sarasa-gothic \
@@ -67,6 +77,9 @@ RUN apt-get update \
 COPY --from=build-stage /wheel /wheel
 
 RUN pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirements.txt && rm -rf /wheel
+
+# 浏览器二进制走 npmmirror（实测约 10MB/s，官方 cdn.playwright.dev 约 2.8MB/s）
+ENV PLAYWRIGHT_DOWNLOAD_HOST="https://cdn.npmmirror.com/binaries/playwright"
 
 RUN playwright install --with-deps chromium \
   && rm -rf /var/lib/apt/lists/*
